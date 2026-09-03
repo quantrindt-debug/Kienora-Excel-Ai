@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Kienora Excel AI V1</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{--b:#2563eb;--bg:#f4f7fb;--card:#fff;--line:#dbe3ef;--text:#152238;--muted:#637083;--ok:#16a34a}
+*{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
+header{height:72px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:5}
+.brand{display:flex;gap:12px;align-items:center}.logo{width:42px;height:42px;border-radius:12px;background:var(--b);color:#fff;font-weight:800;display:grid;place-items:center;font-size:22px}.title{font-size:20px;font-weight:800}.sub{color:var(--muted);font-size:12px;margin-top:2px}
+main{padding:18px;display:grid;grid-template-columns:1.25fr .75fr;gap:18px;min-height:calc(100vh - 72px)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 6px 20px rgba(28,44,76,.06);overflow:hidden}.bar{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;flex-wrap:wrap}.bar h2{font-size:14px;margin:0 14px 0 0}.btn{border:1px solid var(--line);background:#fff;border-radius:9px;padding:9px 12px;cursor:pointer}.btn.primary{background:var(--b);border-color:var(--b);color:#fff}.btn.danger{color:#b91c1c}.status{margin-left:auto;color:var(--ok);font-size:12px}
+#gridWrap{overflow:auto;max-height:calc(100vh - 200px)}table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%}th,td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:7px 8px;white-space:nowrap;font-size:13px;background:#fff}th{position:sticky;top:0;background:#eef4ff;z-index:2;font-weight:700}th:first-child,td:first-child{position:sticky;left:0;z-index:3;background:#f8fbff}.cell{min-width:90px}.cell:focus{outline:2px solid var(--b);outline-offset:-2px}
+.chat{height:calc(100vh - 110px);display:flex;flex-direction:column}.msgs{flex:1;overflow:auto;padding:14px}.msg{padding:10px 12px;border-radius:12px;margin-bottom:10px;line-height:1.45;font-size:13px}.me{background:#eef4ff}.ai{background:#f3f5f8}.preview{border-top:1px solid var(--line);padding:12px 14px}.preview h3{margin:0 0 8px;font-size:13px}.preview table{width:100%;font-size:12px}.preview th,.preview td{white-space:normal}.actions{display:flex;gap:8px;margin-top:10px}.input{border-top:1px solid var(--line);padding:12px;display:flex;gap:8px}.input textarea{flex:1;resize:vertical;min-height:70px;border:1px solid var(--line);border-radius:10px;padding:10px}
+@media(max-width:1000px){main{grid-template-columns:1fr}.chat{height:650px}}
+</style>
+</head>
+<body>
+<header><div class="brand"><div class="logo">K</div><div><div class="title">Kienora Excel AI V1</div><div class="sub">Trợ lý AI giúp làm việc với Excel bằng ngôn ngữ tự nhiên</div></div></div><div><button class="btn" id="undoBtn">↶ Hoàn tác</button><button class="btn" id="redoBtn">↷ Làm lại</button></div></header>
+<main>
+<section class="card"><div class="bar"><h2>1. VÙNG EXCEL</h2><input type="file" id="file" accept=".xlsx,.xls,.csv" hidden><button class="btn primary" id="open">＋ Mở Excel</button><button class="btn" id="download">Tải về</button><button class="btn" id="addRow">＋ Thêm dòng</button><button class="btn danger" id="delRow">Xóa dòng cuối</button><span class="status" id="status">Chưa có file</span></div><div id="gridWrap"><table id="grid"></table></div></section>
+<section class="card chat"><div class="bar"><h2>2. VÙNG LỆNH AI</h2><button class="btn danger" id="clearChat">Xóa cuộc trò chuyện</button></div><div class="msgs" id="msgs"></div><div class="preview" id="preview" style="display:none"><h3>3. XEM TRƯỚC THAY ĐỔI</h3><div id="changeTable"></div><div class="actions"><button class="btn" id="cancel">Hủy thay đổi</button><button class="btn primary" id="apply">✓ Áp dụng thay đổi</button></div></div><div class="input"><textarea id="command" placeholder="Ví dụ: Tìm các lớp chưa có giáo viên môn Sinh học...\nHoặc: Đổi giáo viên môn Hóa lớp 10A5 thành Nguyễn Thị A."></textarea><button class="btn primary" id="send">Gửi</button></div></section>
+</main>
+<script>
+let headers=['TT','Lớp học','Môn học','Giáo viên','Phòng học','Số tiết','Giới hạn'];
+let rows=[]; let pending=null; let history=[]; let redo=[];
+const $=id=>document.getElementById(id);
+function seed(){rows=[['1','10A','Toán','','','',''],['2','10A','Vật lý','','','',''],['3','10A','Hóa','','','',''],['4','10A','Sinh học','','','','']]; render();}
+function render(){const t=$('grid');t.innerHTML='';const tr=t.insertRow();headers.forEach(h=>{const th=document.createElement('th');th.textContent=h;tr.appendChild(th)});rows.forEach((r,i)=>{const tr=t.insertRow();headers.forEach((h,j)=>{const td=tr.insertCell();td.className='cell';td.contentEditable='true';td.textContent=r[j]??'';td.dataset.r=i;td.dataset.c=j;td.addEventListener('input',()=>{rows[i][j]=td.textContent;});});});$('status').textContent=`${rows.length} dòng × ${headers.length} cột`}
+function snapshot(){history.push(JSON.stringify(rows)); if(history.length>50)history.shift(); redo=[]}
+function findCol(name){const n=name.trim().toLowerCase();return headers.findIndex(h=>h.trim().toLowerCase()===n)}
+function renderPreview(changes){$('preview').style.display=changes.length?'block':'none';let html='<table><tr><th>STT</th><th>Dòng</th><th>Lớp học</th><th>Môn học</th><th>Cột</th><th>Giá trị cũ</th><th>Giá trị mới</th></tr>';changes.forEach((c,i)=>{const r=rows[c.row-1]||[];html+=`<tr><td>${i+1}</td><td>${c.row}</td><td>${r[findCol('Lớp học')]||''}</td><td>${r[findCol('Môn học')]||''}</td><td>${c.column}</td><td>${escapeHtml(c.oldValue)}</td><td><b>${escapeHtml(c.newValue)}</b></td></tr>`});html+='</table>';$('changeTable').innerHTML=html}
+function escapeHtml(s){return String(s??'').replace(/[&<>\"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
+function addMsg(who,text){const d=document.createElement('div');d.className='msg '+(who==='Bạn'?'me':'ai');d.innerHTML=`<b>${who}</b><br>${escapeHtml(text).replaceAll('\n','<br>')}`;$('msgs').appendChild(d);$('msgs').scrollTop=$('msgs').scrollHeight}
+$('open').onclick=()=>$('file').click();
+$('file').onchange=e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=ev=>{const wb=XLSX.read(ev.target.result,{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]];const arr=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});if(arr.length){headers=arr[0].map(String);rows=arr.slice(1).map(r=>headers.map((_,i)=>String(r[i]??'')));render();addMsg('Hệ thống',`Đã mở ${f.name}.`);}};rd.readAsArrayBuffer(f)};
+$('download').onclick=()=>{const ws=XLSX.utils.aoa_to_sheet([headers,...rows]);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Sheet1');XLSX.writeFile(wb,'Kienora_Excel_AI_V1.xlsx')};
+$('addRow').onclick=()=>{snapshot();rows.push(headers.map(()=>''));rows[rows.length-1][0]=String(rows.length);render()};
+$('delRow').onclick=()=>{if(rows.length){snapshot();rows.pop();render()}};
+$('undoBtn').onclick=()=>{if(history.length){redo.push(JSON.stringify(rows));rows=JSON.parse(history.pop());render()}};
+$('redoBtn').onclick=()=>{if(redo.length){history.push(JSON.stringify(rows));rows=JSON.parse(redo.pop());render()}};
+$('clearChat').onclick=()=>{$('msgs').innerHTML='';$('preview').style.display='none';pending=null};
+$('cancel').onclick=()=>{pending=null;$('preview').style.display='none'};
+$('apply').onclick=()=>{if(!pending)return;snapshot();pending.forEach(c=>{const j=findCol(c.column);if(j>=0&&rows[c.row-1])rows[c.row-1][j]=c.newValue});pending=null;render();$('preview').style.display='none';addMsg('AI','Đã áp dụng các thay đổi vào bảng Excel.');};
+$('send').onclick=async()=>{const command=$('command').value.trim();if(!command)return;if(!rows.length)return alert('Hãy mở hoặc tạo dữ liệu Excel trước.');addMsg('Bạn',command);$('command').value='';$('send').disabled=true;try{const resp=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command,headers,rows})});const data=await resp.json();if(!resp.ok)throw new Error(data.error||'Lỗi API');addMsg('AI',data.answer||'Đã phân tích.');pending=data.changes||[];renderPreview(pending)}catch(e){addMsg('AI','Lỗi: '+e.message)}finally{$('send').disabled=false}};
+seed();
+</script>
+</body>
+</html>
